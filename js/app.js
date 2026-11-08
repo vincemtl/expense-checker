@@ -773,6 +773,21 @@ if (/^https?:$/.test(location.protocol) && !standalone) {
   showPhone(isAndroid ? 'android' : 'ios');
   const address = `${location.host}${location.pathname.replace(/index\.html$/, '')}`;
   for (const el of document.querySelectorAll('.install-host')) el.textContent = location.host;
+  for (const el of document.querySelectorAll('.install-address')) el.textContent = address.replace(/\/$/, '');
+  // "Copy the address" (iPhone step 1): to paste it in Safari when the page was opened from another app
+  for (const b of document.querySelectorAll('[data-copy-address]')) {
+    b.addEventListener('click', async () => {
+      const link = `${location.protocol}//${address}`;
+      const label = b.querySelector('span');
+      try {
+        await navigator.clipboard.writeText(link);
+        label.textContent = 'Copied: paste it in Safari';
+        setTimeout(() => (label.textContent = 'Copy the address'), 3000);
+      } catch {
+        window.prompt('Copy this address, then paste it in Safari:', link);
+      }
+    });
+  }
   if (!isIOS && !isAndroid) {
     // on a computer: tell where to go on the phone
     $('#install-url-text').textContent = address;

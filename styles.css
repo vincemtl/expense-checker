@@ -472,6 +472,15 @@ details.more > div { margin-top: 12px; }
 .mock-and-bar .url svg { width: 15px; height: 15px; flex: none; }
 .mock-and-bar .tabs { width: 22px; height: 22px; border: 2px solid #444; border-radius: 5px; font: 700 11px/1 var(--font); margin: 0 4px; }
 .mock-and-bar .dots { fill: #444; stroke: none; }
+.mock-ios-url { display: flex; align-items: center; gap: 8px; background: #f9f9f9; }
+.mock-ios-url .aa { font: 600 14px/1 var(--font); color: var(--m-ink); padding: 0 4px; }
+.mock-ios-url .url { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 5px; padding: 8px 12px; border-radius: 12px; background: #e9e9ee; color: var(--m-ink); font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mock-ios-url .url svg { width: 14px; height: 14px; flex: none; }
+.mock-ios-url .mi { width: 28px; color: var(--m-ink); }
+.copy-row { display: flex; }
+.copy-row .btn { min-height: 40px; padding: 8px 14px; font-size: 14.5px; }
+.install-address { overflow-wrap: anywhere; }
+.step .share-tip { color: var(--brand); margin-top: 2px; }
 .mock-list { padding: 4px 0; background: var(--m-card); }
 .mock-list .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 14px; margin: 0 6px; border-bottom: 1px solid #ececf0; }
 .mock-list .row:last-child { border-bottom: 0; }
