@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; worker-src 'self' blob:; style-src 'self'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' blob: data:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Expense Checker</title>
+<meta name="description" content="Checks a Rainmaker Crew Pay Details PDF against the expense contract rules. Works offline; the PDF never leaves the device.">
+<meta name="theme-color" content="#0f4c6e">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Expenses">
+<link rel="stylesheet" href="styles.css">
+<script type="module" src="js/app.js"></script>
+</head>
+<body>
+<header class="appbar">
+  <div class="appbar-inner">
+    <svg class="logo" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="currentColor" opacity=".16"/><path d="M19 14h19l9 9v27a3 3 0 0 1-3 3H19a3 3 0 0 1-3-3V17a3 3 0 0 1 3-3z" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linejoin="round"/><path d="M24 36l6 6 11-13" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <h1>Expense Checker</h1>
+    <span class="badge" id="offline-badge" hidden>Works offline</span>
+    <button class="icon-btn" id="open-settings" type="button" aria-label="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
+  </div>
+</header>
+
+<main id="main">
+  <input id="file" type="file" accept="application/pdf,.pdf" class="sr-only">
+  <input id="tables-file" type="file" accept="application/pdf,.pdf" multiple class="sr-only">
+  <section class="card hero" id="import">
+    <h2>Check your expenses</h2>
+    <p class="lead">Import a Rainmaker <b>Crew Pay Details</b> PDF to confirm every meal allowance and gratuity was paid according to the contract rules.</p>
+    <div class="drop" id="drop">
+      <label class="btn primary big" for="file" id="file-label">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3"/><path d="M7 8l5-5 5 5"/><path d="M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg>
+        Import Rainmaker PDF
+      </label>
+      <div class="hint-drop" id="drop-hint">or drop the PDF here</div>
+    </div>
+    <p class="privacy">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+      <span>PDFs are read on this device only. Nothing is uploaded, and the app works without an internet connection.</span>
+    </p>
+    <details class="howto" id="howto">
+      <summary>
+        <svg class="howto-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+        <span class="howto-title">How to print the PDF from Rainmaker</span>
+        <span class="howto-count">6 steps</span>
+        <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+      </summary>
+      <ol class="steps" id="howto-steps">
+        <li class="step" data-step="period">
+          <div class="step-head">
+            <span class="num" aria-hidden="true">1</span>
+            <div>
+              <h3>Open Crew Pay Details</h3>
+              <p>In Rainmaker, choose the <b>Period</b>, then press <span class="rm-btn">Search</span>.</p>
+            </div>
+          </div>
+          <figure class="shot shot-period">
+            <img src="img/howto-period.png" width="631" height="74" alt="Rainmaker filters: the Period list and the Search button" loading="lazy">
+            <span class="hl hl-period" data-n="1"></span>
+            <span class="hl hl-search" data-n="2"></span>
+          </figure>
+        </li>
+
+        <li class="step" data-step="plus">
+          <div class="step-head">
+            <span class="num" aria-hidden="true">2</span>
+            <div>
+              <h3>Open all the columns</h3>
+              <p>Press <span class="rm-ico" aria-label="plus">+</span> at the <b>top-left of the table</b>, next to <b>Day</b>. Once pressed it turns into <span class="rm-ico" aria-label="minus">−</span>.</p>
+            </div>
+          </div>
+          <figure class="shot shot-plus">
+            <img src="img/howto-plus.png" width="495" height="54" alt="Table header: the button left of Day, shown as minus once pressed" loading="lazy">
+            <span class="hl hl-plus"></span>
+          </figure>
+          <p class="see">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+            <span>You should now see the expense columns <b>B, L, D, S</b> and <b>CICO</b>:</span>
+          </p>
+          <figure class="shot shot-exp">
+            <img src="img/howto-exp.png" width="670" height="54" alt="EXP columns B, L, D, S and CICO" loading="lazy">
+            <span class="hl ok hl-exp"></span>
+          </figure>
+        </li>
+
+        <li class="step" data-step="details">
+          <div class="step-head">
+            <span class="num" aria-hidden="true">3</span>
+            <div>
+              <h3>Show the flight details</h3>
+              <p>Press <span class="rm-btn">More ▾</span>, then <span class="rm-btn">Details</span>. Each day now lists its flights.</p>
+            </div>
+          </div>
+          <figure class="shot shot-more">
+            <img src="img/howto-more.png" width="337" height="241" alt="The More menu with Print, Details, View History" loading="lazy">
+            <span class="hl hl-more" data-n="1"></span>
+            <span class="hl hl-details" data-n="2"></span>
+          </figure>
+        </li>
+
+        <li class="step" data-step="print">
+          <div class="step-head">
+            <span class="num" aria-hidden="true">4</span>
+            <div>
+              <h3>Print</h3>
+              <p>Press <span class="rm-btn">More ▾</span> again, then <span class="rm-btn">Print</span>.</p>
+            </div>
+          </div>
+          <figure class="shot shot-more">
+            <img src="img/howto-more.png" width="337" height="241" alt="The More menu with Print highlighted" loading="lazy">
+            <span class="hl hl-more" data-n="1"></span>
+            <span class="hl hl-print" data-n="2"></span>
+          </figure>
+        </li>
+
+        <li class="step" data-step="pdf">
+          <div class="step-head">
+            <span class="num" aria-hidden="true">5</span>
+            <div>
+              <h3>Save as PDF, in Landscape</h3>
+              <p>In the print window, set <b>Printer</b> to <b>Save as PDF</b> and <b>Layout</b> to <b>Landscape</b>, then press <b>Save</b>.</p>
+            </div>
+          </div>
+          <figure class="shot shot-print">
+            <img src="img/howto-print.png" width="591" height="400" alt="Print window: Printer Save as PDF, Layout Landscape" loading="lazy">
+            <span class="hl hl-pdf" data-n="1"></span>
+            <span class="hl hl-landscape" data-n="2"></span>
+          </figure>
+        </li>
+
+        <li class="step" data-step="import">
+          <div class="step-head">
+            <span class="num" aria-hidden="true">6</span>
+            <div>
+              <h3>Import it in this app</h3>
+              <p>Press <b>Import Rainmaker PDF</b> and choose the saved file. The app first checks that it was printed this way.</p>
+            </div>
+          </div>
+        </li>
+      </ol>
+    </details>
+  </section>
+
+  <section class="card" id="tables">
+    <div class="tables-head">
+      <div>
+        <h2>Monthly tables</h2>
+        <p class="muted small">Meal rates and earlier report times change every month. Add the <b>Meal Allowances</b> PDF and the <b>What’s New</b> bulletin of each month you want to check.</p>
+      </div>
+      <label class="btn" for="tables-file">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        Add Meal Expenses and Report Time PDFs
+      </label>
+    </div>
+
+    <details class="howto" id="tables-guide">
+      <summary>
+        <svg class="howto-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
+        <span class="howto-title">Where to get these PDFs</span>
+        <span class="howto-count">4 steps</span>
+        <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+      </summary>
+      <ol class="steps">
+        <li class="step">
+          <div class="step-head">
+            <span class="num" aria-hidden="true">1</span>
+            <div>
+              <h3>Open the Block Bid Package</h3>
+              <p>On the <b>Aeronet</b> portal, go to <span class="crumbs"><span>Crew Scheduling &amp; Planning</span><i aria-hidden="true">›</i><span>Block Bid Package</span></span></p>
+            </div>
+          </div>
+        </li>
+
+        <li class="step">
+          <div class="step-head">
+            <span class="num" aria-hidden="true">2</span>
+            <div>
+              <h3>Choose the block month, then Base: ALL</h3>
+              <p>Open the <b>BlockPeriod</b> of the month you want to check, then <span class="ui-chip">Base: ALL</span>.</p>
+            </div>
+          </div>
+          <figure class="shot shot-bbp-list">
+            <img src="img/howto-bbp-list.png" width="700" height="680" alt="Block Bid Packages: BlockPeriod 2026-11 November, Base: ALL, and the What's New and Meal Allowances files" loading="lazy">
+            <span class="hl hl-bbp-period" data-n="1"></span>
+            <span class="hl hl-bbp-base" data-n="2"></span>
+            <span class="hl ok hl-bbp-whatsnew"></span>
+            <span class="hl ok hl-bbp-meals"></span>
+          </figure>
+          <p class="see">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+            <span>The two files you need: <b class="nowrap">…_Whats_New-BL.pdf</b> and <b class="nowrap">…-MealAllowances.pdf</b></span>
+          </p>
+        </li>
+
+        <li class="step">
+          <div class="step-head">
+            <span class="num" aria-hidden="true">3</span>
+            <div>
+              <h3>Download both files</h3>
+              <p>Hover the <b>What’s New</b> file, press the three dots <span class="ui-chip dots" aria-label="three dots">⋯</span>, then <b>Download</b>. Do the same for the <b>Meal Allowances</b> file.</p>
+            </div>
+          </div>
+          <div class="shots-row">
+            <figure class="shot shot-bbp-dots">
+              <img src="img/howto-bbp-dots.png" width="610" height="80" alt="The three dots next to the What's New file" loading="lazy">
+              <span class="hl hl-bbp-dots" data-n="1"></span>
+            </figure>
+            <figure class="shot shot-bbp-menu">
+              <img src="img/howto-bbp-menu.png" width="406" height="290" alt="The menu with Download" loading="lazy">
+              <span class="hl hl-bbp-download" data-n="2"></span>
+            </figure>
+          </div>
+        </li>
+
+        <li class="step">
+          <div class="step-head">
+            <span class="num" aria-hidden="true">4</span>
+            <div>
+              <h3>Add them here</h3>
+              <p>Press <b>Add Meal Expenses and Report Time PDFs</b> and choose both files (you can select them together). Repeat for every month you would like to validate your pay.</p>
+            </div>
+          </div>
+        </li>
+      </ol>
+    </details>
+
+    <div id="tables-msg" aria-live="polite"></div>
+    <div id="tables-list"></div>
+  </section>
+
+  <section id="status" hidden></section>
+  <section id="precheck" hidden></section>
+  <section id="results" hidden></section>
+
+  <section class="card no-print" id="install" hidden>
+    <div class="install-now" id="install-now" hidden>
+      <div>
+        <b>Install on this device</b>
+        <div class="muted small">Adds Expense Checker to your home screen. It then works offline.</div>
+      </div>
+      <button class="btn primary" type="button" id="install-btn">Install</button>
+    </div>
+    <details class="howto" id="install-guide">
+      <summary>
+        <svg class="howto-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M12 7v7"/><path d="M9 11l3 3 3-3"/></svg>
+        <span class="howto-title">Install on your phone</span>
+        <span class="howto-count">iPhone · Android</span>
+        <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+      </summary>
+      <p class="install-intro">Add Expense Checker to your home screen: it opens like an app and works without an internet connection.</p>
+      <p class="install-url" id="install-url" hidden>On your phone, open <b id="install-url-text"></b></p>
+      <div class="seg phone-tabs" role="group" aria-label="Type of phone">
+        <button type="button" data-phone="ios" aria-pressed="true">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.4 12.6c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.1-2.8.9-3.5.9s-1.9-.9-3.1-.8c-1.6 0-3 .9-3.8 2.3-1.6 2.8-.4 7 1.2 9.3.8 1.1 1.7 2.4 2.9 2.3 1.2 0 1.6-.7 3-.7s1.8.7 3 .7c1.3 0 2.1-1.1 2.8-2.3.9-1.3 1.3-2.6 1.3-2.6s-2.4-.9-2.4-3.8zM14.1 5.8c.6-.8 1.1-1.8 1-2.8-.9 0-2 .6-2.7 1.4-.6.7-1.1 1.7-1 2.7 1 .1 2.1-.5 2.7-1.3z"/></svg>
+          iPhone
+        </button>
+        <button type="button" data-phone="android" aria-pressed="false">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.6 9.5l1.7-2.9a.4.4 0 0 0-.7-.4l-1.7 3a10.4 10.4 0 0 0-9.8 0l-1.7-3a.4.4 0 0 0-.7.4l1.7 2.9A9.6 9.6 0 0 0 2 17h20a9.6 9.6 0 0 0-4.4-7.5zM7.5 14.2a1 1 0 1 1 0-2 1 1 0 0 1 0 2zm9 0a1 1 0 1 1 0-2 1 1 0 0 1 0 2z"/></svg>
+          Android
+        </button>
+      </div>
+
+      <ol class="steps phone-steps" data-phone="ios">
+        <li class="step">
+          <div class="step-head"><span class="num" aria-hidden="true">1</span><div>
+            <h3>Tap the Share button</h3>
+            <p>In <b>Safari</b>, it’s at the bottom of the screen (at the top on an iPad). In Chrome, it’s in the address bar.</p>
+          </div></div>
+          <div class="mock mock-ios-bar" aria-hidden="true">
+            <span class="mi"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></span>
+            <span class="mi"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></span>
+            <span class="mi ring"><svg viewBox="0 0 24 24"><path d="M12 3v11"/><path d="M8 7l4-4 4 4"/><path d="M8 10H6v10h12V10h-2"/></svg></span>
+            <span class="mi"><svg viewBox="0 0 24 24"><path d="M4 5h6a2 2 0 0 1 2 2v12a2 2 0 0 0-2-2H4z"/><path d="M20 5h-6a2 2 0 0 0-2 2v12a2 2 0 0 1 2-2h6z"/></svg></span>
+            <span class="mi"><svg viewBox="0 0 24 24"><rect x="4" y="7" width="12" height="13" rx="2"/><path d="M8 4h10a2 2 0 0 1 2 2v10"/></svg></span>
+          </div>
+        </li>
+        <li class="step">
+          <div class="step-head"><span class="num" aria-hidden="true">2</span><div>
+            <h3>Tap “Add to Home Screen”</h3>
+            <p>Scroll down the list if you don’t see it.</p>
+          </div></div>
+          <div class="mock mock-list" aria-hidden="true">
+            <div class="row"><span>Copy</span><svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16V6a2 2 0 0 1 2-2h10"/></svg></div>
+            <div class="row"><span>Add to Reading List</span><svg viewBox="0 0 24 24"><circle cx="7" cy="12" r="3"/><circle cx="17" cy="12" r="3"/><path d="M10 12h4"/></svg></div>
+            <div class="row ring"><span>Add to Home Screen</span><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M12 8v8M8 12h8"/></svg></div>
+            <div class="row"><span>Find on Page</span><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg></div>
+          </div>
+        </li>
+        <li class="step">
+          <div class="step-head"><span class="num" aria-hidden="true">3</span><div>
+            <h3>Tap “Add”</h3>
+            <p>Top-right corner. You can keep the name <b>Expenses</b>.</p>
+          </div></div>
+          <div class="mock mock-sheet" aria-hidden="true">
+            <div class="sheet-head"><span class="link">Cancel</span><b>Add to Home Screen</b><span class="link strong ring">Add</span></div>
+            <div class="sheet-app"><span class="app-ico"></span><span class="field">Expenses</span></div>
+          </div>
+        </li>
+        <li class="step">
+          <div class="step-head"><span class="num" aria-hidden="true">4</span><div>
+            <h3>Open it from your home screen</h3>
+            <p>It works without a connection from now on.</p>
+          </div></div>
+          <div class="mock mock-home" aria-hidden="true"><span class="home-app ring"><span class="app-ico"></span><span>Expenses</span></span></div>
+        </li>
+      </ol>
+
+      <ol class="steps phone-steps" data-phone="android" hidden>
+        <li class="step">
+          <div class="step-head"><span class="num" aria-hidden="true">1</span><div>
+            <h3>Tap the ⋮ menu</h3>
+            <p>In <b>Chrome</b>, top-right corner, next to the address.</p>
+          </div></div>
+          <div class="mock mock-and-bar" aria-hidden="true">
+            <span class="mi"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7"/><path d="M6 10v10h12V10"/></svg></span>
+            <span class="url"><svg viewBox="0 0 24 24"><rect x="6" y="11" width="12" height="9" rx="2"/><path d="M9 11V8a3 3 0 0 1 6 0v3"/></svg><span class="install-host">expense-checker</span></span>
+            <span class="mi tabs">1</span>
+            <span class="mi ring"><svg viewBox="0 0 24 24" class="dots"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg></span>
+          </div>
+        </li>
+        <li class="step">
+          <div class="step-head"><span class="num" aria-hidden="true">2</span><div>
+            <h3>Tap “Install app”</h3>
+            <p>On some phones it’s called <b>Add to Home screen</b>.</p>
+          </div></div>
+          <div class="mock mock-list mock-menu" aria-hidden="true">
+            <div class="row"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M12 9v6M9 12h6"/></svg><span>New tab</span></div>
+            <div class="row"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg><span>History</span></div>
+            <div class="row"><svg viewBox="0 0 24 24"><path d="M12 4v11"/><path d="M8 11l4 4 4-4"/><path d="M5 20h14"/></svg><span>Downloads</span></div>
+            <div class="row ring"><svg viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M12 7v7"/><path d="M9.5 11.5L12 14l2.5-2.5"/></svg><span>Install app</span></div>
+            <div class="row"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/></svg><span>Settings</span></div>
+          </div>
+        </li>
+        <li class="step">
+          <div class="step-head"><span class="num" aria-hidden="true">3</span><div>
+            <h3>Tap “Install”</h3>
+            <p>Chrome asks to confirm.</p>
+          </div></div>
+          <div class="mock mock-dialog" aria-hidden="true">
+            <b>Install app</b>
+            <div class="sheet-app"><span class="app-ico"></span><span>Expense Checker</span></div>
+            <div class="actions"><span class="link">Cancel</span><span class="link strong ring">Install</span></div>
+          </div>
+        </li>
+        <li class="step">
+          <div class="step-head"><span class="num" aria-hidden="true">4</span><div>
+            <h3>Open it from your home screen</h3>
+            <p>Or from the app list. It works without a connection from now on.</p>
+          </div></div>
+          <div class="mock mock-home" aria-hidden="true"><span class="home-app ring"><span class="app-ico"></span><span>Expenses</span></span></div>
+        </li>
+      </ol>
+      <p class="install-note">After an update, open the app once with a connection to get the new version.</p>
+    </details>
+  </section>
+  <p class="footer no-print" id="footer">Expense Checker · Air Canada–CUPE Collective Agreement (April 1, 2025)</p>
+</main>
+
+<dialog id="settings">
+  <form method="dialog" id="settings-form">
+    <h2>Settings</h2>
+    <div class="field">
+      <label for="fx">U.S. → Canadian exchange rate</label>
+      <input id="fx" name="fx" type="number" inputmode="decimal" step="0.0001" min="0" placeholder="Worked out from the statement">
+      <div class="help">Only used when the month’s Meal Allowances table is not loaded (the table already gives U.S. meals in Canadian funds). Leave empty to work it out from the U.S. meals on the statement.</div>
+    </div>
+    <div class="field">
+      <label for="theme">Appearance</label>
+      <select id="theme" name="theme">
+        <option value="">Match device</option>
+        <option value="light">Light</option>
+        <option value="dark">Dark</option>
+      </select>
+    </div>
+    <div class="dialog-actions">
+      <button class="btn" value="cancel" type="submit">Cancel</button>
+      <button class="btn primary" value="save" type="submit" id="settings-save">Save</button>
+    </div>
+  </form>
+</dialog>
+</body>
+</html>
