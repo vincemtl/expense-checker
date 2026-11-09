@@ -32,6 +32,20 @@
 <main id="main">
   <input id="file" type="file" accept="application/pdf,.pdf" class="sr-only">
   <input id="tables-file" type="file" accept="application/pdf,.pdf" multiple class="sr-only">
+
+  <section class="card gate" id="gate" hidden aria-live="polite">
+    <svg class="gate-ico" id="gate-ico-wifi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 8.8a15 15 0 0 1 20 0"/><path d="M5 12.6a10 10 0 0 1 14 0"/><path d="M8.5 16.4a5 5 0 0 1 7 0"/><path d="M12 20h.01"/></svg>
+    <svg class="gate-ico" id="gate-ico-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" hidden><circle cx="12" cy="12" r="9"/><path d="M5.7 5.7l12.6 12.6"/></svg>
+    <h2 id="gate-title">Checking…</h2>
+    <p id="gate-text"></p>
+    <button class="btn primary big" type="button" id="gate-retry">Try again</button>
+    <p class="muted small" id="gate-status"></p>
+  </section>
+
+  <div class="access-warn" id="access-warn" hidden>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 8.8a15 15 0 0 1 20 0"/><path d="M5 12.6a10 10 0 0 1 14 0"/><path d="M8.5 16.4a5 5 0 0 1 7 0"/><path d="M12 20h.01"/></svg>
+    <span id="access-warn-text"></span>
+  </div>
   <section class="card hero" id="import">
     <h2>Check your expenses</h2>
     <p class="lead">Import a Rainmaker <b>Crew Pay Details</b> PDF to confirm every meal allowance and gratuity was paid according to the contract rules.</p>
@@ -44,7 +58,7 @@
     </div>
     <p class="privacy">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
-      <span>PDFs are read on this device only. Nothing is uploaded, and the app works without an internet connection.</span>
+      <span>PDFs are read on this device only. Nothing is uploaded, and the app works without an internet connection (it needs one at least once every 30 days).</span>
     </p>
     <details class="howto" id="howto">
       <summary>
@@ -385,11 +399,6 @@
 <dialog id="settings">
   <form method="dialog" id="settings-form">
     <h2>Settings</h2>
-    <div class="field">
-      <label for="fx">U.S. → Canadian exchange rate</label>
-      <input id="fx" name="fx" type="number" inputmode="decimal" step="0.0001" min="0" placeholder="Worked out from the statement">
-      <div class="help">Only used when the month’s Meal Allowances table is not loaded (the table already gives U.S. meals in Canadian funds). Leave empty to work it out from the U.S. meals on the statement.</div>
-    </div>
     <div class="field">
       <label for="theme">Appearance</label>
       <select id="theme" name="theme">

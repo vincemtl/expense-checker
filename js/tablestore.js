@@ -45,7 +45,7 @@ const monthNo = (p) => Number(String(p).slice(0, 4)) * 12 + Number(String(p).sli
 
 /**
  * Tables to use for a statement period, from tables keyed by period ("202606").
- *  meals:    that month only (rates and the U.S. exchange rate change every month).
+ *  meals:    that month only (the rates change every month).
  *  refMeals: before March 2026 (no 7.02.02 column in effect yet) and without that month's table: the nearest
  *            table from before March 2026, for its Canada rates.
  *  report:   that month, or else the latest earlier bulletin (the list rarely changes).

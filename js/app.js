@@ -7,6 +7,7 @@ import { countryName } from './stations.js';
 import { detectKind, parseMealTable, parseReportTimes } from './tables.js';
 import { saveTable, tablesFor, listTables } from './tablestore.js';
 import { APP_VERSION } from './version.js';
+import { checkAccess, localAccess, MAX_OFFLINE_DAYS } from './access.js';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = globalThis.__PDFJS_WORKER_SRC__ || new URL('../vendor/pdf.worker.min.mjs', import.meta.url).href;
 
@@ -60,9 +61,10 @@ const SEV_LABEL = { ok: 'OK', error: 'Problem', warn: 'Review', info: 'Info' };
 const SETTINGS_KEY = 'expense-checker-settings';
 function loadSettings() {
   try {
-    return { fxRate: null, theme: '', ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') };
+    const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+    return { theme: saved.theme || '' };
   } catch {
-    return { fxRate: null, theme: '' };
+    return { theme: '' };
   }
 }
 function saveSettings(s) {
@@ -82,6 +84,76 @@ function applyTheme(theme) {
 
 // ---------------------------------------------------------------- state
 const state = { fileName: '', st: null, pre: null, result: null, filter: 'attention' };
+
+// ---------------------------------------------------------------- online check-in / on-off switch (access.js)
+let locked = false;
+let lastAccessAttempt = 0;
+const fmtDay = (ms) => new Date(ms).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+
+function applyAccess(a, { pending = false } = {}) {
+  locked = a.state === 'blocked' || a.state === 'disabled';
+  document.body.classList.toggle('locked', locked);
+  const gate = $('#gate');
+  gate.hidden = !locked;
+  gate.classList.toggle('off', a.state === 'disabled');
+  // SVG elements have no .hidden property: use the attribute
+  $('#gate-ico-wifi').toggleAttribute('hidden', a.state === 'disabled');
+  $('#gate-ico-off').toggleAttribute('hidden', a.state !== 'disabled');
+  const retry = $('#gate-retry');
+  if (a.state === 'disabled') {
+    $('#gate-title').textContent = 'Expense Checker is not available';
+    $('#gate-text').textContent = a.message || 'This app has been switched off.';
+    retry.textContent = 'Check again';
+    retry.hidden = false;
+  } else if (pending) {
+    $('#gate-title').textContent = 'Checking the connection…';
+    $('#gate-text').textContent = '';
+    retry.hidden = true;
+  } else if (a.state === 'blocked') {
+    $('#gate-title').textContent = 'Connect to the internet';
+    $('#gate-text').textContent =
+      `Expense Checker needs to connect to the internet at least once every ${MAX_OFFLINE_DAYS} days.` +
+      (a.lastOk && a.reason !== 'clock' ? ` Last connection: ${fmtDay(a.lastOk)}.` : '') +
+      ' Turn on Wi-Fi or mobile data, then tap Try again.';
+    retry.textContent = 'Try again';
+    retry.hidden = false;
+  }
+  const warn = $('#access-warn');
+  warn.hidden = a.state !== 'warn';
+  if (a.state === 'warn') $('#access-warn-text').textContent = `Connect to the internet within ${a.daysLeft} day${a.daysLeft === 1 ? '' : 's'} to keep using Expense Checker.`;
+}
+
+async function runAccessCheck() {
+  lastAccessAttempt = Date.now();
+  if (locked) $('#gate-status').textContent = 'Checking…';
+  const a = await checkAccess();
+  applyAccess(a);
+  $('#gate-status').textContent = locked && !a.online && a.state !== 'disabled' ? 'Still no connection.' : '';
+  return a;
+}
+
+/** Before any work: lock straight away if the 30 days ran out while the app stayed open. */
+function accessAllowed() {
+  if (locked) return false;
+  const a = localAccess();
+  if (a.state === 'blocked' || a.state === 'disabled') {
+    applyAccess(a);
+    return false;
+  }
+  return true;
+}
+
+{
+  const now = localAccess();
+  // nothing recorded yet (first start): show "Checking…" instead of a lock screen while the site is contacted
+  applyAccess(now, { pending: now.state === 'blocked' && now.reason === 'never' });
+  runAccessCheck();
+  $('#gate-retry').addEventListener('click', runAccessCheck);
+  window.addEventListener('online', runAccessCheck);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && Date.now() - lastAccessAttempt > 6 * 3600 * 1000) runAccessCheck();
+  });
+}
 
 // ---------------------------------------------------------------- import
 const fileInput = $('#file');
@@ -154,6 +226,7 @@ function showTablesMsg(results) {
 }
 
 async function importTables(files, alsoStatement = false) {
+  if (!accessAllowed()) return null;
   const results = [];
   let statement = null;
   showTablesMsg([{ ok: true, text: `Reading ${files.length} PDF${files.length > 1 ? 's' : ''}…` }]);
@@ -181,7 +254,7 @@ function renderTablesList() {
   const list = listTables();
   const box = $('#tables-list');
   if (!list.length) {
-    box.replaceChildren(h('p', { class: 'muted small', text: 'No tables yet. Without them, Canadian contract rates are used and U.S. meals are checked with the exchange rate.' }));
+    box.replaceChildren(h('p', { class: 'muted small', text: 'No tables yet. Without them, the agreement’s Canada rates are used, and U.S. meals and layover rates outside Canada cannot be checked.' }));
     return;
   }
   const row = (t) =>
@@ -212,6 +285,7 @@ async function handleFiles(files) {
 }
 
 async function handleFile(file, preDoc = null) {
+  if (!accessAllowed()) return;
   state.fileName = file.name;
   $('#import').hidden = true;
   $('#tables').hidden = true;
@@ -328,7 +402,7 @@ function tablesBlock(period) {
       : Number(period) < FIRST_CONTRACT_PERIOD
         ? 'No table from before March 2026 is loaded, so the agreement’s first 7.02.02 rates will be used; they may be higher than the rates in effect then'
         : 'The agreement’s 7.02.02 Canada rates will be used';
-    rows.push({ ok: false, label: `No Meal Allowances table for ${mon}`, detail: `${canada}. U.S. meals are checked with the exchange rate, and overseas layover rates cannot be checked.` });
+    rows.push({ ok: false, label: `No Meal Allowances table for ${mon}`, detail: `${canada}. U.S. meals and layover rates outside Canada cannot be checked.` });
   }
   if (t.report && !t.report.fallbackFor) rows.push({ ok: true, label: `What’s New report times · ${mon}`, detail: `${t.report.rows.length} flights with an earlier report time (${t.report.source})` });
   else if (t.report) rows.push({ ok: false, label: `No What’s New bulletin for ${mon}`, detail: `The ${periodLabel(t.report.period)} list of earlier report times will be used.` });
@@ -386,8 +460,9 @@ function againRow() {
 
 // ---------------------------------------------------------------- results
 function runCheck() {
+  if (!accessAllowed()) return;
   try {
-    state.result = verify(state.st, { fxRate: settings.fxRate ? Number(settings.fxRate) : null, tables: tablesFor(state.st.meta.period) });
+    state.result = verify(state.st, { tables: tablesFor(state.st.meta.period) });
   } catch (err) {
     console.error(err);
     showStatus(h('div', { class: 'banner error' }, icon('error'), h('div', {}, h('h2', { text: 'Something went wrong while checking' }), h('p', { text: String(err && err.message ? err.message : err) }))));
@@ -439,9 +514,6 @@ function renderResults() {
     rateRows.push(h('dt', { text: 'Canada' }), h('dd', { text: bldl(tm.canada) }));
     if (tm.us) rateRows.push(h('dt', { text: 'U.S.' }), h('dd', { text: `${bldl(tm.us)} (Canadian funds)` }));
   } else {
-    let fxTxt = 'No U.S. meals on this statement';
-    if (r.fx) fxTxt = `${r.fx.value.toFixed(4)} (${r.fx.source === 'entered' ? 'entered in Settings' : 'worked out from the U.S. meals'})`;
-    if (r.fx && r.fx.inferred && !r.fx.inferred.consistent) fxTxt += ' · U.S. meals were converted at different rates';
     const src =
       r.rates.key === 'CHART'
         ? `Canada rates of the ${r.rates.label}${r.rates.fromOtherMonth ? ` (no table for ${periodLabel(m.period)})` : ''}`
@@ -449,7 +521,7 @@ function renderResults() {
           ? `${r.rates.label} (no table from before March 2026 loaded)`
           : `7.02.02, ${r.rates.label}`;
     rateRows.push(h('dt', { text: 'Meal rates' }), h('dd', { text: `${src}: ${bldl(r.rates)}` }));
-    rateRows.push(h('dt', { text: 'USD → CAD' }), h('dd', { text: fxTxt }));
+    rateRows.push(h('dt', { text: 'U.S. meals' }), h('dd', { text: `Not checked: add the ${periodLabel(m.period)} Meal Allowances table` }));
   }
   const tr = r.tables.report;
   rateRows.push(
@@ -723,18 +795,13 @@ function printReport() {
 // ---------------------------------------------------------------- settings dialog
 const dlg = $('#settings');
 $('#open-settings').addEventListener('click', () => {
-  $('#fx').value = settings.fxRate || '';
   $('#theme').value = settings.theme || '';
   if (typeof dlg.showModal === 'function') dlg.showModal();
   else dlg.setAttribute('open', '');
 });
 dlg.addEventListener('close', () => {
   if (dlg.returnValue !== 'save') return;
-  const fx = Number($('#fx').value);
-  settings = {
-    fxRate: fx > 0 ? fx : null,
-    theme: $('#theme').value,
-  };
+  settings = { theme: $('#theme').value };
   saveSettings(settings);
   applyTheme(settings.theme);
   if (state.result) runCheck();

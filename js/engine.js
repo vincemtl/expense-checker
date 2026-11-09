@@ -15,7 +15,6 @@ const DUTY_TYPES = /^(LEG|DH|STAND|STBY|SBY)/;
 const NOT_FLOWN = new Set(['PP', 'SICK', 'DISPLACED', 'DROP', 'DROPPED', 'MISSED', 'MISS', 'CNX', 'CANCEL', 'CANCELLED', 'VAC', 'VACATION', 'LOA', 'NOSHOW', 'REMOVED']);
 
 export const DEFAULT_OPTIONS = {
-  fxRate: null, // USD -> CAD official rate; only used when the month's Meal Allowances table is not loaded
   tables: null, // { meals, refMeals, report } imported by the user: tablestore.tablesFor(period)
   layoverGapMin: ALLOWANCES.CICO_MIN_MINUTES, // ground time at an outstation that makes a layover
   homeBreakMin: 240, // ground time at Home Base that ends a duty period
@@ -645,31 +644,6 @@ function cicoCandidates(tls, off, opts) {
   return clusters;
 }
 
-// ---------- exchange rate ----------
-function inferFx(st, rates) {
-  let lo = -Infinity;
-  let hi = Infinity;
-  const used = [];
-  for (const d of st.days) {
-    for (const M of MEAL_COLS) {
-      const p = d.expenses[M];
-      if (!p) continue;
-      const u = rates[M];
-      if (Math.abs(p - u) < 0.006) continue;
-      const r = p / u;
-      if (r < 1.0 || r > 2.0) continue;
-      lo = Math.max(lo, (p - 0.005) / u);
-      hi = Math.min(hi, (p + 0.005) / u);
-      used.push({ day: d.key, M, p, r });
-    }
-  }
-  if (!used.length) return null;
-  if (lo <= hi) return { value: round4((lo + hi) / 2), range: [lo, hi], consistent: true, used };
-  const sorted = used.map((x) => x.r).sort((a, b) => a - b);
-  return { value: round4(sorted[Math.floor(sorted.length / 2)]), range: null, consistent: false, used };
-}
-const round4 = (v) => Math.round(v * 10000) / 10000;
-
 // ---------- main ----------
 export function verify(st, userOpts = {}) {
   const opts = { ...DEFAULT_OPTIONS, ...userOpts };
@@ -709,15 +683,9 @@ export function verify(st, userOpts = {}) {
   const lastDay = st.days.length ? st.days[st.days.length - 1].idx : 0;
   const clusters = [...clusterMeals(cands), ...lou43Clusters(tlS, off, firstDay, lastDay)].sort((a, b) => a.anchor - b.anchor);
 
-  // without the month's chart: Canada rates above, U.S. meals = the same figures in U.S. funds x exchange rate
-  const inferred = mealTable ? null : inferFx(st, rates);
-  let fx = null;
-  if (!mealTable && opts.fxRate && Number(opts.fxRate) > 0) fx = { value: Number(opts.fxRate), source: 'entered', inferred };
-  else if (inferred) fx = { value: inferred.value, source: 'inferred', inferred };
-
   // 7.02.03 minimum: the Canada allowance in effect (7.02.02 column, or the chart's Canada row before March 2026)
   const floorKnown = !!mealTable && rates.key !== 'FBMFR-ASSUMED';
-  // price(station, M) -> { amount, label, options: [{ amount, name, bracelet }], bracelet, needFx, unpriced }
+  // price(station, M) -> { amount, label, options: [{ amount, name, bracelet }], bracelet, unpriced }
   const priceCache = new Map();
   const price = (station, M) => {
     const k = `${station}|${M}`;
@@ -737,7 +705,7 @@ export function verify(st, userOpts = {}) {
         }
       }
     } else if (iso === 'CA') res = { amount: rates[M], label: 'Canada', options: [] };
-    else if (iso === 'US' && isDom(station)) res = { amount: fx ? round2(rates[M] * fx.value) : null, label: 'U.S.', options: [], needFx: !fx, usd: rates[M] };
+    else if (iso === 'US') res = { amount: null, label: 'U.S.', options: [], unpriced: true, note: `U.S. meals are checked with the ${periodLabel(period)} Meal Allowances table: add it (Add Meal Expenses and Report Time PDFs).` };
     else res = { amount: null, label: countryName(iso), options: [], unpriced: true, note: `Add the ${periodLabel(period)} Meal Allowances table (Add Meal Expenses and Report Time PDFs) to check the ${station} rate.` };
     priceCache.set(k, res);
     return res;
@@ -749,13 +717,11 @@ export function verify(st, userOpts = {}) {
       return r ? { amount: r[M === 'ND' ? 'D' : M], label: r.name, options: [] } : null;
     }
     if (iso === 'CA') return { amount: rates[M], label: 'Canada', options: [] };
-    if (iso === 'US' && fx) return { amount: round2(rates[M] * fx.value), label: 'U.S.', options: [] };
     return null;
   };
   const priceNote = (pr, amt) => {
     if (mealTable && pr.tableAmount !== undefined) return `${pr.label}: the table gives ${money(pr.tableAmount)}, below the 7.02.02 amount ${money(amt)}, which is the minimum (7.02.03)`;
     if (mealTable) return `${pr.label} rate ${money(amt)} (${tableName})${pr.approx ? ', country rate used for this airport' : ''}`;
-    if (pr.usd !== undefined && fx) return `U.S. allowance ${money(pr.usd)} USD × ${fx.value} = ${money(amt)}`;
     return `${pr.label} rate ${money(amt)} (${rates.label})`;
   };
 
@@ -816,8 +782,7 @@ export function verify(st, userOpts = {}) {
     if (match.dayIdx !== idx) lines.push(`Rainmaker shows it on ${label(idx)}; the meal period starts on ${label(match.dayIdx)} local time.`);
     const interp = match.status === 'possible' ? 'Paid (depends on interpretation)' : 'Paid correctly';
     if (expAmt === null) {
-      if (pr.needFx) Object.assign(item, { status: 'ok', severity: 'ok', title: `${interp} (U.S. meal)`, note: `Add the ${periodLabel(period)} Meal Allowances table (Add Meal Expenses and Report Time PDFs), or enter the official exchange rate in Settings, to check the converted amount.` });
-      else Object.assign(item, { status: 'unpriced', severity: 'info', title: 'Paid (rate not available)', note: pr.note });
+      Object.assign(item, { status: 'unpriced', severity: 'info', title: 'Paid (rate not available)', note: pr.note });
       items.push(item);
       continue;
     }
@@ -870,7 +835,7 @@ export function verify(st, userOpts = {}) {
     // amount differs: another contract column?
     const col = mealTable
       ? null
-      : RATE_TABLE.map(withNightDinner).find((r) => r.key !== rates.key && (Math.abs(r[p.M] - p.amount) < 0.015 || (fx && Math.abs(round2(r[p.M] * fx.value) - p.amount) < 0.015)));
+      : RATE_TABLE.map(withNightDinner).find((r) => r.key !== rates.key && Math.abs(r[p.M] - p.amount) < 0.015);
     Object.assign(item, {
       status: col ? 'wrong-rate' : 'amount',
       severity: 'error',
@@ -888,7 +853,7 @@ export function verify(st, userOpts = {}) {
     const hotelDepends = pr.options.some((o) => o.bracelet);
     const amt = pr.amount;
     const certain = c.status === 'expected' && !hotelDepends;
-    let note = amt !== null ? priceNote(pr, amt) : pr.needFx ? 'U.S. amount (needs the month’s Meal Allowances table or the exchange rate)' : pr.note;
+    let note = amt !== null ? priceNote(pr, amt) : pr.note;
     if (hotelDepends) note += `. Depends on the hotel: ${pr.options.filter((o) => o.bracelet).map((o) => o.name).join(', ')} has a bracelet instead.`;
     items.push({
       date: label(c.dayIdx),
@@ -1039,7 +1004,7 @@ export function verify(st, userOpts = {}) {
       text: own
         ? `The 7.02.02 table of the agreement starts with the first block month following ratification (March 2026), so the Canada rates of the ${tableName} are used: ${bldsText(rates)}.`
         : rates.key === 'CHART'
-          ? `No Meal Allowances table for ${periodLabel(period)}: the Canada rates of the ${periodLabel(rates.chartPeriod)} table are used (${bldsText(rates)}), and U.S. meals are checked with the exchange rate. Add the ${periodLabel(period)} table (Add Meal Expenses and Report Time PDFs) for an exact check.`
+          ? `No Meal Allowances table for ${periodLabel(period)}: the Canada rates of the ${periodLabel(rates.chartPeriod)} table are used (${bldsText(rates)}). U.S. meals and layover rates outside Canada cannot be checked. Add the ${periodLabel(period)} table (Add Meal Expenses and Report Time PDFs) for an exact check.`
           : `No Meal Allowances table from before March 2026 is loaded, so the agreement's first 7.02.02 column is used (${bldsText(rates)}). It may be higher than the rates in effect in ${periodLabel(period)}: add that month’s table (Add Meal Expenses and Report Time PDFs).`,
     });
   }
@@ -1095,7 +1060,6 @@ export function verify(st, userOpts = {}) {
     meta: st.meta,
     home,
     rates,
-    fx,
     tables: {
       meals: mealTable ? { period: mealTable.period, source: mealTable.source || '', fileName: mealTable.fileName, canada: mealTable.canada, us: mealTable.us } : null,
       report: opts.tables && opts.tables.report ? { period: opts.tables.report.period, source: opts.tables.report.source || '', fileName: opts.tables.report.fileName, fallback: !!opts.tables.report.fallbackFor, rows: opts.tables.report.rows.length } : null,

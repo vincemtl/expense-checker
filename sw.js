@@ -1,6 +1,6 @@
 // Service worker: keeps the whole app on the device so it works with no connection.
 // The build script rewrites CACHE_VERSION whenever any app file changes.
-const CACHE_VERSION = '37b3a06496';
+const CACHE_VERSION = 'e8e39a94db';
 const CACHE = `expense-checker-${CACHE_VERSION}`;
 const ASSETS = [
   './',
@@ -9,6 +9,8 @@ const ASSETS = [
   'manifest.webmanifest',
   'js/app.js',
   'js/version.js',
+  'js/config.js',
+  'js/access.js',
   'js/pdftext.js',
   'js/parser.js',
   'js/engine.js',
@@ -49,6 +51,8 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
+  // the on/off switch must always come from the network, never from the offline copy
+  if (new URL(req.url).pathname.endsWith('/status.json')) return;
   if (req.mode === 'navigate') {
     event.respondWith(caches.match('index.html').then((hit) => hit || fetch(req)));
     return;

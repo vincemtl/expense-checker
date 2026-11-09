@@ -552,3 +552,15 @@ dialog h2 { margin: 0; font-size: 18px; }
 }
 .nowrap { white-space: nowrap; }
 .btn-row.wide .btn { flex: 1 1 260px; } /* long labels: side by side on wide screens, stacked on phones */
+
+/* ---------- online check-in / switched off ---------- */
+body.locked main > *:not(#gate):not(#footer), body.locked #offline-badge { display: none !important; }
+.gate { text-align: center; padding: 28px 20px 22px; }
+.gate .gate-ico { width: 46px; height: 46px; color: var(--brand); }
+.gate.off .gate-ico { color: var(--err); }
+.gate h2 { font-size: 20px; margin: 8px 0 6px; }
+.gate p { margin: 6px auto 0; max-width: 440px; }
+.gate #gate-text { color: var(--muted); }
+.gate .btn { margin-top: 16px; }
+.access-warn { display: flex; gap: 10px; align-items: center; padding: 10px 14px; border-radius: var(--radius); background: var(--warn-bg); color: var(--warn); font-size: 14px; font-weight: 600; }
+.access-warn svg { width: 20px; height: 20px; flex: none; }
