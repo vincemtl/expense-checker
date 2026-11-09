@@ -1,3 +1,4 @@
+import './compat.js'; // must come first: lets pdf.js read PDFs on iPhone / Safari
 import * as pdfjsLib from '../vendor/pdf.min.mjs';
 import { extractPages } from './pdftext.js';
 import { parseStatement, precheck } from './parser.js';
@@ -8,7 +9,7 @@ import { saveTable, tablesFor, listTables, clearTables } from './tablestore.js';
 import { APP_VERSION } from './version.js';
 import { checkAccess, localAccess, MAX_OFFLINE_DAYS } from './access.js';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = globalThis.__PDFJS_WORKER_SRC__ || new URL('../vendor/pdf.worker.min.mjs', import.meta.url).href;
+pdfjsLib.GlobalWorkerOptions.workerSrc = globalThis.__PDFJS_WORKER_SRC__ || new URL('./pdf-worker.js', import.meta.url).href;
 
 // ---------------------------------------------------------------- helpers
 const $ = (s) => document.querySelector(s);

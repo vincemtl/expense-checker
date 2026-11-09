@@ -1,6 +1,6 @@
 // Service worker: keeps the whole app on the device so it works with no connection.
 // The build script rewrites CACHE_VERSION whenever any app file changes.
-const CACHE_VERSION = '6091cc91b4';
+const CACHE_VERSION = '7c834641b3';
 const CACHE = `expense-checker-${CACHE_VERSION}`;
 const ASSETS = [
   './',
@@ -8,6 +8,8 @@ const ASSETS = [
   'styles.css',
   'manifest.webmanifest',
   'js/app.js',
+  'js/compat.js',
+  'js/pdf-worker.js',
   'js/version.js',
   'js/config.js',
   'js/access.js',

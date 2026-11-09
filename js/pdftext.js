@@ -11,6 +11,15 @@ export async function extractPages(pdfjsLib, data) {
     useSystemFonts: false,
     stopAtErrors: false,
   });
+  try {
+    return await readPages(pdfjsLib, task);
+  } finally {
+    // always close the document, also when it could not be read
+    await task.destroy().catch(() => {});
+  }
+}
+
+async function readPages(pdfjsLib, task) {
   const doc = await task.promise;
   const meta = await doc.getMetadata().catch(() => null);
   const pages = [];
@@ -39,7 +48,6 @@ export async function extractPages(pdfjsLib, data) {
     page.cleanup();
   }
   const title = meta && meta.info ? meta.info.Title || '' : '';
-  await task.destroy();
   return { title, pages };
 }
 
