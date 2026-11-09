@@ -51,22 +51,37 @@ const META_LABELS = {
   'Status:': 'status',
 };
 
+const PERIOD = /^(19|20)\d{2}(0[1-9]|1[0-2])$/; // e.g. 202603
+
 function parseMeta(lines) {
   const meta = { employee: '', position: '', period: '', domicile: '', status: '', lineType: '' };
+  let filterPeriod = '';
   for (const l of lines) {
     const ws = l.words;
     for (let i = 0; i < ws.length; i++) {
       const t = ws[i].t;
       if (t === 'Employee:' && !meta.employee) {
-        meta.employee = ws.slice(i + 1).map((w) => w.t).join(' ');
+        // the name ends at the first wide gap (prints that include the page's filters put "More" on this line)
+        const name = [];
+        for (let k = i + 1; k < ws.length; k++) {
+          if (name.length && ws[k].x0 - ws[k - 1].x1 > 40) break;
+          name.push(ws[k].t);
+        }
+        meta.employee = name.join(' ');
       } else if (META_LABELS[t] && !meta[META_LABELS[t]] && ws[i + 1]) {
-        meta[META_LABELS[t]] = ws[i + 1].t;
+        const v = ws[i + 1].t;
+        // "Period:" also labels the filter at the top of the page, followed by the Search button: keep looking
+        if (META_LABELS[t] === 'period' && !PERIOD.test(v)) continue;
+        meta[META_LABELS[t]] = v;
       } else if (t === 'Type:' && i > 0 && ws[i - 1].t === 'Line' && ws[i + 1] && !meta.lineType) {
         meta.lineType = ws.slice(i + 1, i + 3).map((w) => w.t).filter((x) => !x.endsWith(':')).join(' ');
       }
+      // the filter's drop-down text, "202603 - Mar 02/Mar 31", in case the employee block has no period
+      if (!filterPeriod && PERIOD.test(t) && ws[i + 1] && ws[i + 1].t === '-') filterPeriod = t;
     }
-    if (meta.employee && meta.period && meta.domicile && meta.position && meta.status) break;
+    if (meta.employee && meta.period && meta.domicile && meta.position && meta.status && meta.lineType) break;
   }
+  if (!meta.period) meta.period = filterPeriod;
   return meta;
 }
 
