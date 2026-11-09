@@ -1,6 +1,6 @@
 // Service worker: keeps the whole app on the device so it works with no connection.
 // The build script rewrites CACHE_VERSION whenever any app file changes.
-const CACHE_VERSION = '7c834641b3';
+const CACHE_VERSION = 'b89d2ce1f1';
 const CACHE = `expense-checker-${CACHE_VERSION}`;
 const ASSETS = [
   './',
@@ -30,6 +30,11 @@ const ASSETS = [
   'img/howto-bbp-list.png',
   'img/howto-bbp-dots.png',
   'img/howto-bbp-menu.png',
+  'img/howto-ios-share.png',
+  'img/howto-ios-print.png',
+  'img/howto-ios-options.png',
+  'img/howto-ios-savefiles.png',
+  'img/howto-ios-files.png',
   'icons/icon.svg',
   'icons/icon-192.png',
   'icons/icon-512.png',

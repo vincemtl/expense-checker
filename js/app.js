@@ -14,6 +14,14 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = globalThis.__PDFJS_WORKER_SRC__ || new 
 // ---------------------------------------------------------------- helpers
 const $ = (s) => document.querySelector(s);
 
+// iPhone / iPad (also iPadOS that presents itself as a Mac): show the Safari version of the print guide (steps 4-5)
+const IS_IOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+if (IS_IOS) {
+  document.documentElement.classList.add('is-ios');
+  for (const el of document.querySelectorAll('.only-ios')) el.hidden = false;
+  for (const el of document.querySelectorAll('.not-ios')) el.hidden = true;
+}
+
 function h(tag, props, ...kids) {
   const el = document.createElement(tag);
   for (const [k, v] of Object.entries(props || {})) {
@@ -837,7 +845,7 @@ if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
 
 // "Install on your phone": shown on the web site (not in the single desktop file) until the app is installed.
 const installCard = $('#install');
-const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const isIOS = IS_IOS;
 const isAndroid = /android/i.test(navigator.userAgent);
 const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 

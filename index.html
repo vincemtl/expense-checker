@@ -209,7 +209,7 @@
           </figure>
         </li>
 
-        <li class="step" data-step="print">
+        <li class="step not-ios" data-step="print">
           <div class="step-head">
             <span class="num" aria-hidden="true">4</span>
             <div>
@@ -224,7 +224,7 @@
           </figure>
         </li>
 
-        <li class="step" data-step="pdf">
+        <li class="step not-ios" data-step="pdf">
           <div class="step-head">
             <span class="num" aria-hidden="true">5</span>
             <div>
@@ -239,12 +239,61 @@
           </figure>
         </li>
 
+        <!-- iPhone / iPad (Safari): steps 4 and 5 through the Share menu, shown instead of the two above -->
+        <li class="step only-ios" data-step="print" hidden>
+          <div class="step-head">
+            <span class="num" aria-hidden="true">4</span>
+            <div>
+              <h3>Print from the Share menu</h3>
+              <p>In Safari, tap the <b>Share</b> button <span class="ios-ico" aria-label="Share"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v11"/><path d="M8 7l4-4 4 4"/><path d="M8 10H6v10h12V10h-2"/></svg></span> (top right on iPad, at the bottom on iPhone), then <b>View More</b>, then <b>Print</b>.</p>
+            </div>
+          </div>
+          <div class="shots-row">
+            <figure class="shot shot-ios-share">
+              <img src="img/howto-ios-share.png" width="387" height="443" alt="Safari's Share button and the share menu with View More" loading="lazy">
+              <span class="hl hl-ios-share-btn" data-n="1"></span>
+              <span class="hl hl-ios-viewmore" data-n="2"></span>
+            </figure>
+            <figure class="shot shot-ios-print">
+              <img src="img/howto-ios-print.png" width="343" height="155" alt="Print in the list of the share menu" loading="lazy">
+              <span class="hl hl-ios-print-row" data-n="3"></span>
+            </figure>
+          </div>
+        </li>
+
+        <li class="step only-ios" data-step="pdf" hidden>
+          <div class="step-head">
+            <span class="num" aria-hidden="true">5</span>
+            <div>
+              <h3>Landscape, then save the PDF in Downloads</h3>
+              <p>In <b>Options</b>, set <b>Orientation</b> to <b>Landscape</b>, then tap the <b>Share</b> button at the top of Options.</p>
+            </div>
+          </div>
+          <figure class="shot shot-ios-options">
+            <img src="img/howto-ios-options.png" width="540" height="431" alt="Print options: Orientation set to Landscape, Share button at the top" loading="lazy">
+            <span class="hl hl-ios-landscape" data-n="1"></span>
+            <span class="hl hl-ios-options-share" data-n="2"></span>
+          </figure>
+          <p class="sub">Choose <b>Save to Files</b>, select <b>Downloads</b>, then tap <b>Save</b>.</p>
+          <div class="shots-row">
+            <figure class="shot shot-ios-savefiles">
+              <img src="img/howto-ios-savefiles.png" width="375" height="357" alt="Share menu of the PDF with Save to Files" loading="lazy">
+              <span class="hl hl-ios-savetofiles" data-n="3"></span>
+            </figure>
+            <figure class="shot shot-ios-files">
+              <img src="img/howto-ios-files.png" width="816" height="307" alt="Files: Downloads selected, Save button" loading="lazy">
+              <span class="hl hl-ios-downloads" data-n="4"></span>
+              <span class="hl hl-ios-save" data-n="5"></span>
+            </figure>
+          </div>
+        </li>
+
         <li class="step" data-step="import">
           <div class="step-head">
             <span class="num" aria-hidden="true">6</span>
             <div>
               <h3>Import it in this app</h3>
-              <p>Press <b>Import Rainmaker PDF</b> and choose the saved file. The app first checks that it was printed this way.</p>
+              <p>Press <b>Import Rainmaker PDF</b> and choose the saved file<span class="only-ios" hidden> (in <b>Downloads</b>)</span>. The app first checks that it was printed this way.</p>
             </div>
           </div>
         </li>
