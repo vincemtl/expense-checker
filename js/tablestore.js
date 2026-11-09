@@ -31,6 +31,16 @@ export function saveTable(t) {
   }
 }
 
+/** Removes every table added on this device ("Clear all added PDFs" in Settings). */
+export function clearTables() {
+  memory = null;
+  try {
+    localStorage.removeItem(KEY);
+  } catch {
+    /* storage unavailable: nothing was kept */
+  }
+}
+
 export function removeTable(kind, period) {
   const u = loadUser();
   delete u[kind][period];

@@ -2,10 +2,10 @@ import * as pdfjsLib from '../vendor/pdf.min.mjs';
 import { extractPages } from './pdftext.js';
 import { parseStatement, precheck } from './parser.js';
 import { verify, fmtClock } from './engine.js';
-import { RULE_TEXT, RATE_TABLE, MEAL_NAMES, AGREEMENT, FIRST_CONTRACT_PERIOD } from './contract.js';
+import { RULE_TEXT, RATE_TABLE, MEAL_NAMES, AGREEMENT } from './contract.js';
 import { countryName } from './stations.js';
 import { detectKind, parseMealTable, parseReportTimes } from './tables.js';
-import { saveTable, tablesFor, listTables } from './tablestore.js';
+import { saveTable, tablesFor, listTables, clearTables } from './tablestore.js';
 import { APP_VERSION } from './version.js';
 import { checkAccess, localAccess, MAX_OFFLINE_DAYS } from './access.js';
 
@@ -254,7 +254,7 @@ function renderTablesList() {
   const list = listTables();
   const box = $('#tables-list');
   if (!list.length) {
-    box.replaceChildren(h('p', { class: 'muted small', text: 'No tables yet. Without them, the agreement’s Canada rates are used, and U.S. meals and layover rates outside Canada cannot be checked.' }));
+    box.replaceChildren(h('p', { class: 'muted small', text: 'No PDFs added yet. A month’s statement can only be checked once its Meal Allowances table is added.' }));
     return;
   }
   const row = (t) =>
@@ -335,7 +335,7 @@ function renderPrecheck() {
   const card = h('div', { class: 'card' });
   card.append(
     h('h2', { text: 'Step 1 · PDF check' }),
-    h('p', { class: 'muted small', text: 'Before checking expenses, the app confirms the PDF was printed the right way.' }),
+    h('p', { class: 'muted small', text: 'Before checking expenses, the app confirms the PDF was printed the right way and that the monthly PDFs of the same month are added.' }),
     h('div', { class: 'file-line' }, icon('file'), h('span', { class: 'name', text: state.fileName })),
   );
   if (m.employee || m.period) {
@@ -351,27 +351,43 @@ function renderPrecheck() {
     sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
     return;
   }
-  const list = h('ul', { class: 'checks' });
-  for (const c of pre.checks) {
-    list.append(
-      h(
-        'li',
-        { class: `check ${c.ok ? 'ok' : 'bad'}` },
-        icon(c.ok ? 'ok' : 'error'),
-        h('div', {}, h('div', { class: 'c-label', text: c.label }), h('div', { class: 'c-detail', text: c.detail }), c.ok ? null : h('div', { class: 'c-fix' }, h('b', { text: 'Fix: ' }), c.fix)),
-      ),
+  const checkItem = (c) => {
+    const level = c.ok ? 'ok' : c.optional ? 'warn' : 'bad';
+    return h(
+      'li',
+      { class: `check ${level}` },
+      icon(level === 'bad' ? 'error' : level),
+      h('div', {}, h('div', { class: 'c-label', text: c.label }), h('div', { class: 'c-detail', text: c.detail }), c.ok || !c.fix ? null : h('div', { class: 'c-fix' }, h('b', { text: c.optional ? 'Recommended: ' : 'Fix: ' }), c.fix)),
     );
-  }
-  card.append(list);
+  };
+  card.append(h('div', { class: 'check-group', text: 'Printed from Rainmaker' }), h('ul', { class: 'checks' }, pre.checks.map(checkItem)));
 
-  if (pre.ok) {
+  // the Meal Allowances table of the statement's own month is required; its What's New bulletin is recommended
+  const mon = periodLabel(m.period);
+  const monthly = monthlyChecks(m.period);
+  const monthlyOk = monthly.every((c) => c.ok || c.optional);
+  const noReport = monthly.some((c) => c.id === 'report' && !c.ok);
+  card.append(monthlyBlock(mon, monthly, checkItem));
+
+  if (pre.ok && monthlyOk) {
+    const text = noReport
+      ? `Printed correctly, and the ${mon} Meal Allowances table is added. Without the ${mon} What’s New bulletin, some rules may not be validated (the earlier report time of some flights).`
+      : `Printed correctly, and the ${mon} Meal Allowances table and What’s New bulletin are added.`;
     card.append(
-      h('div', { class: 'banner ok', style: null }, icon('ok'), h('div', {}, h('h2', { text: 'The PDF is printed correctly' }), h('p', { text: 'Landscape, all columns expanded with "+", and More › Details shown.' }))),
-      tablesBlock(m.period),
+      h('div', { class: 'banner ok' }, icon('ok'), h('div', {}, h('h2', { text: 'Ready to check' }), h('p', { text }))),
       h('div', { class: 'btn-row no-print' }, h('button', { class: 'btn primary big', type: 'button', onclick: runCheck, svg: ICON.play + '<span>Check expenses</span>' })),
     );
-    card.querySelector('.banner').style.marginTop = '14px';
     sec.replaceChildren(card);
+  } else if (pre.ok) {
+    card.append(
+      h(
+        'div',
+        { class: 'banner warn' },
+        icon('warn'),
+        h('div', {}, h('h2', { text: `Add the ${mon} Meal Allowances table` }), h('p', { text: `The PDF is printed correctly. To check it, add the Meal Allowances table of ${mon} above (required). The What’s New bulletin is optional but recommended.` })),
+      ),
+    );
+    sec.replaceChildren(card, againRow(false));
   } else {
     const bad = pre.checks.filter((c) => !c.ok);
     card.append(
@@ -383,47 +399,60 @@ function renderPrecheck() {
       ),
       howToList(bad),
     );
-    card.querySelector('.banner').style.marginTop = '14px';
     sec.replaceChildren(card, againRow());
   }
+  const banner = card.querySelector('.banner');
+  if (banner) banner.style.marginTop = '14px';
   sec.hidden = false;
   sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-// Which monthly tables will be used for this statement (shown before processing).
-function tablesBlock(period) {
+// The monthly PDFs of a statement: [{ id, ok, optional, label, detail, fix }]
+//   Meal Allowances table: required.  What's New bulletin: optional, missing = warning.
+function monthlyChecks(period) {
   const t = tablesFor(period);
   const mon = periodLabel(period);
-  const rows = [];
-  if (t.meals) rows.push({ ok: true, label: `Meal Allowances table · ${mon}`, detail: `${t.meals.rows.length} stations (${t.meals.source})` });
-  else {
-    const canada = t.refMeals
-      ? `The Canada rates of the ${periodLabel(t.refMeals.period)} table will be used (the agreement’s 7.02.02 rates start in March 2026)`
-      : Number(period) < FIRST_CONTRACT_PERIOD
-        ? 'No table from before March 2026 is loaded, so the agreement’s first 7.02.02 rates will be used; they may be higher than the rates in effect then'
-        : 'The agreement’s 7.02.02 Canada rates will be used';
-    rows.push({ ok: false, label: `No Meal Allowances table for ${mon}`, detail: `${canada}. U.S. meals and layover rates outside Canada cannot be checked.` });
-  }
-  if (t.report && !t.report.fallbackFor) rows.push({ ok: true, label: `What’s New report times · ${mon}`, detail: `${t.report.rows.length} flights with an earlier report time (${t.report.source})` });
-  else if (t.report) rows.push({ ok: false, label: `No What’s New bulletin for ${mon}`, detail: `The ${periodLabel(t.report.period)} list of earlier report times will be used.` });
-  else rows.push({ ok: false, label: 'No What’s New bulletin', detail: 'Only the standard report times will be used.' });
-  const missing = rows.some((r) => !r.ok);
+  const report = t.report && !t.report.fallbackFor ? t.report : null;
+  const earlier = t.report && t.report.fallbackFor ? t.report : null;
+  return [
+    {
+      id: 'meals',
+      ok: !!t.meals,
+      label: `Meal Allowances table · ${mon} (required)`,
+      detail: t.meals ? `Added: ${t.meals.rows.length} stations.` : 'Not added yet: the meal rates cannot be checked without it.',
+      fix: `add ${period}-MealAllowances.pdf (Block Bid Package › ${mon} › Base: ALL).`,
+    },
+    {
+      id: 'report',
+      ok: !!report,
+      optional: true,
+      label: `What’s New bulletin · ${mon} (optional)`,
+      detail: report
+        ? `Added: ${report.rows.length} flights with an earlier report time.`
+        : earlier
+          ? `Not added: some rules may not be validated. The ${periodLabel(earlier.period)} list of earlier report times is used, so a flight added in ${mon} could be missed.`
+          : 'Not added: some rules may not be validated. Standard report times are used, so the earlier report time of some flights is not taken into account.',
+      fix: `add ${period}_Whats_New-BL.pdf (Block Bid Package › ${mon} › Base: ALL).`,
+    },
+  ];
+}
+
+function monthlyBlock(mon, monthly, checkItem) {
+  const missing = monthly.some((c) => !c.ok);
+  const requiredMissing = monthly.some((c) => !c.ok && !c.optional);
   const msgs = state.tablesMsg || [];
   state.tablesMsg = null;
-  const box = h(
+  return h(
     'div',
     { class: 'tables-block' },
-    h('div', { class: 't', text: 'Monthly tables' }),
+    h('div', { class: 'check-group', text: `Monthly PDFs for ${mon}` }),
     msgs.map((r) => h('div', { class: `tmsg ${r.ok ? 'ok' : 'bad'}` }, icon(r.ok ? 'ok' : 'error'), h('span', { text: r.text }))),
-    h(
-      'ul',
-      { class: 'checks' },
-      rows.map((r) => h('li', { class: `check ${r.ok ? 'ok' : 'warn'}` }, icon(r.ok ? 'ok' : 'warn'), h('div', {}, h('div', { class: 'c-label', text: r.label }), h('div', { class: 'c-detail', text: r.detail })))),
-    ),
-    missing ? h('div', { class: 'btn-row no-print' }, h('label', { class: 'btn', for: 'tables-file', svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Add Meal Expenses and Report Time PDFs</span>' })) : null,
+    h('ul', { class: 'checks' }, monthly.map(checkItem)),
+    missing
+      ? h('div', { class: 'btn-row no-print' }, h('label', { class: requiredMissing ? 'btn primary' : 'btn', for: 'tables-file', svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Add Meal Expenses and Report Time PDFs</span>' }))
+      : null,
     missing ? tablesGuide() : null,
   );
-  return box;
 }
 
 // The "Where to get these PDFs" guide of the start screen, reused (closed) wherever a table is missing.
@@ -454,13 +483,17 @@ function howToList(bad) {
   return h('div', { class: 'reprint' }, h('div', { class: 't', text: 'How to re-print' }), h('p', { class: 'muted small', text: 'Follow all the steps again; the outlined ones are what was missing.' }), steps);
 }
 
-function againRow() {
-  return h('div', { class: 'btn-row no-print' }, h('label', { class: 'btn primary', for: 'file', svg: ICON.again + '<span>Import another Rainmaker PDF</span>' }));
+function againRow(primary = true) {
+  return h('div', { class: 'btn-row no-print' }, h('label', { class: primary ? 'btn primary' : 'btn', for: 'file', svg: ICON.again + '<span>Import another Rainmaker PDF</span>' }));
 }
 
 // ---------------------------------------------------------------- results
 function runCheck() {
   if (!accessAllowed()) return;
+  if (!monthlyChecks(state.st.meta.period).every((c) => c.ok || c.optional)) {
+    renderPrecheck();
+    return;
+  }
   try {
     state.result = verify(state.st, { tables: tablesFor(state.st.meta.period) });
   } catch (err) {
@@ -526,7 +559,11 @@ function renderResults() {
   const tr = r.tables.report;
   rateRows.push(
     h('dt', { text: 'Report times' }),
-    h('dd', { text: tr ? `What’s New ${periodLabel(tr.period)}${tr.fallback ? ` (no bulletin for ${periodLabel(m.period)})` : ''}, ${tr.rows} flights with an earlier report time` : 'Standard report times (no What’s New bulletin loaded)' }),
+    h('dd', {
+      text: tr && !tr.fallback
+        ? `What’s New ${periodLabel(tr.period)}, ${tr.rows} flights with an earlier report time`
+        : `${tr ? `What’s New ${periodLabel(tr.period)} used (no bulletin for ${periodLabel(m.period)})` : 'Standard report times (no What’s New bulletin)'}: some rules may not be validated`,
+    }),
   );
   const stats = h(
     'div',
@@ -792,10 +829,36 @@ function printReport() {
   window.print();
 }
 
+// ---------------------------------------------------------------- back to the start (top-left title)
+function goHome() {
+  if (locked) return; // the lock screen stays until the app may be used again
+  Object.assign(state, { fileName: '', st: null, pre: null, result: null, filter: 'attention', tablesMsg: null });
+  showStatus(null);
+  for (const id of ['#precheck', '#results']) {
+    $(id).replaceChildren();
+    $(id).hidden = true;
+  }
+  $('#import').hidden = false;
+  $('#tables').hidden = false;
+  showTablesMsg([]);
+  renderTablesList();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+$('#home-link').addEventListener('click', (e) => {
+  e.preventDefault();
+  goHome();
+});
+
 // ---------------------------------------------------------------- settings dialog
 const dlg = $('#settings');
 $('#open-settings').addEventListener('click', () => {
   $('#theme').value = settings.theme || '';
+  // "Your data": how many months of monthly PDFs are stored on this device
+  const months = listTables();
+  $('#data-summary').textContent = months.length
+    ? `Monthly PDFs added on this device: ${months.length} month${months.length > 1 ? 's' : ''} (${months.map((t) => periodLabel(t.period)).slice(0, 3).join(', ')}${months.length > 3 ? ', …' : ''}).`
+    : 'No monthly PDFs are stored on this device.';
+  $('#clear-data').disabled = !months.length;
   if (typeof dlg.showModal === 'function') dlg.showModal();
   else dlg.setAttribute('open', '');
 });
@@ -806,6 +869,27 @@ dlg.addEventListener('close', () => {
   applyTheme(settings.theme);
   if (state.result) runCheck();
 });
+
+// "Clear all added PDFs" (Settings) with a confirmation: back to a clean sheet
+const confirmClear = $('#confirm-clear');
+$('#clear-data').addEventListener('click', () => {
+  const n = listTables().length;
+  $('#confirm-clear-text').textContent =
+    `This removes the Meal Allowances tables and What’s New bulletins of ${n} month${n > 1 ? 's' : ''} added on this device and goes back to the start screen. ` +
+    'You will need to add them again to check a statement.';
+  if (typeof confirmClear.showModal === 'function') confirmClear.showModal();
+  else if (window.confirm('Clear all added PDFs?')) clearEverything();
+});
+confirmClear.addEventListener('close', () => {
+  if (confirmClear.returnValue === 'clear') clearEverything();
+  confirmClear.returnValue = '';
+});
+function clearEverything() {
+  clearTables();
+  if (dlg.open) dlg.close();
+  goHome();
+  showTablesMsg([{ ok: true, text: 'All added PDFs were cleared. Add the monthly PDFs again to check a statement.' }]);
+}
 
 // ---------------------------------------------------------------- offline + install
 $('#footer').textContent = `Expense Checker ${APP_VERSION} · Air Canada–CUPE Collective Agreement (April 1, 2025) · runs entirely on this device`;

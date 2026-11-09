@@ -96,6 +96,8 @@ button, input, select { font: inherit; color: inherit; }
 .appbar-inner { max-width: 760px; margin: 0 auto; display: flex; align-items: center; gap: 10px; }
 .appbar .logo { width: 30px; height: 30px; flex: none; }
 .appbar h1 { font-size: 18px; margin: 0; font-weight: 650; letter-spacing: 0.1px; flex: 1; min-width: 0; }
+.appbar .home-link { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; color: inherit; text-decoration: none; border-radius: 10px; padding: 2px 4px 2px 0; }
+.appbar .home-link:focus-visible { outline: 3px solid currentColor; outline-offset: 2px; }
 .appbar .badge {
   font-size: 12px;
   padding: 3px 8px;
@@ -307,6 +309,7 @@ kbd {
 .check.bad svg { color: var(--err); }
 .check.warn { background: var(--warn-bg); }
 .check.warn svg { color: var(--warn); }
+.check.warn .c-fix b { color: var(--warn); }
 
 /* monthly tables */
 .tables-head { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
@@ -533,6 +536,13 @@ dialog h2 { margin: 0; font-size: 18px; }
   width: 100%;
 }
 .dialog-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.data-field { padding-top: 12px; border-top: 1px solid var(--line); }
+.data-field .field-title { font-weight: 600; font-size: 14.5px; }
+.data-field .btn { justify-self: start; margin-top: 4px; }
+.btn.danger { background: var(--err); border-color: var(--err); color: var(--surface); }
+.btn.danger:disabled { opacity: 0.45; cursor: not-allowed; }
+.confirm-text { margin: 0; }
+#confirm-clear form p.small { margin: 0; }
 
 @media (max-width: 420px) {
   .stats { grid-template-columns: 1fr 1fr; }
@@ -564,3 +574,4 @@ body.locked main > *:not(#gate):not(#footer), body.locked #offline-badge { displ
 .gate .btn { margin-top: 16px; }
 .access-warn { display: flex; gap: 10px; align-items: center; padding: 10px 14px; border-radius: var(--radius); background: var(--warn-bg); color: var(--warn); font-size: 14px; font-weight: 600; }
 .access-warn svg { width: 20px; height: 20px; flex: none; }
+.check-group { font-weight: 650; font-size: 14.5px; margin: 14px 0 8px; }
