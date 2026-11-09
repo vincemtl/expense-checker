@@ -2,8 +2,7 @@ import * as pdfjsLib from '../vendor/pdf.min.mjs';
 import { extractPages } from './pdftext.js';
 import { parseStatement, precheck } from './parser.js';
 import { verify, fmtClock } from './engine.js';
-import { RULE_TEXT, RATE_TABLE, MEAL_NAMES, AGREEMENT } from './contract.js';
-import { countryName } from './stations.js';
+import { MEAL_NAMES } from './contract.js';
 import { detectKind, parseMealTable, parseReportTimes } from './tables.js';
 import { saveTable, tablesFor, listTables, clearTables } from './tablestore.js';
 import { APP_VERSION } from './version.js';
@@ -502,7 +501,7 @@ function runCheck() {
     return;
   }
   const r = state.result;
-  const attention = r.items.filter((i) => i.severity === 'error' || i.severity === 'warn').length + r.other.filter((o) => o.severity === 'error' || o.severity === 'warn').length;
+  const attention = r.items.filter((i) => i.severity === 'error' || i.severity === 'warn').length + shownOther(r).length;
   state.filter = attention ? 'attention' : 'all';
   // collapse the pre-check into a one-line confirmation
   const sec = $('#precheck');
@@ -512,16 +511,31 @@ function runCheck() {
   renderResults();
 }
 
+// Other allowances shown on the results page: the $45 uniform cleaning and the $120 footwear (statement that
+// contains July 1st), and only when they are missing or wrong. Everything else is left out.
+function shownOther(r) {
+  return r.other.filter((o) => (o.id === 'clean' || o.id === 'shoes') && (o.severity === 'error' || o.severity === 'warn'));
+}
+
 function renderResults() {
   const r = state.result;
   const sec = $('#results');
-  const s = r.summary;
   const nodes = [];
 
-  // verdict
-  const nErr = r.items.filter((i) => i.severity === 'error').length + r.other.filter((o) => o.severity === 'error').length;
-  const nWarn = r.items.filter((i) => i.severity === 'warn').length + r.other.filter((o) => o.severity === 'warn').length;
+  // verdict (from the allowances and the other allowances that are shown)
+  const others = shownOther(r);
+  const all = [...r.items, ...others];
+  const nErr = all.filter((i) => i.severity === 'error').length;
+  const nWarn = all.filter((i) => i.severity === 'warn').length;
   const nOk = r.items.filter((i) => i.severity === 'ok').length;
+  const gap = (i) => (i.expected === null || i.expected === undefined ? 0 : Math.max(0, i.expected - (i.paid || 0)));
+  const round2 = (v) => Math.round(v * 100) / 100;
+  const s = {
+    ...r.summary,
+    verdict: nErr ? 'error' : nWarn ? 'warn' : 'ok',
+    certainOwed: round2(all.filter((i) => i.severity === 'error').reduce((t, i) => t + gap(i), 0)),
+    owed: round2(all.filter((i) => i.severity === 'error' || i.severity === 'warn').reduce((t, i) => t + gap(i), 0)),
+  };
   let head;
   let sub;
   if (s.verdict === 'ok') {
@@ -537,34 +551,32 @@ function renderResults() {
   }
   nodes.push(h('div', { class: `banner ${s.verdict}` }, icon(s.verdict), h('div', {}, h('h2', { text: head }), h('p', { text: sub }))));
 
+  // reading check: the report's Total row must equal the sum of its day rows, otherwise part of the PDF was misread
+  const mismatched = r.recon.filter((x) => !x.ok);
+  if (mismatched.length || !r.recon.length) {
+    nodes.push(
+      h(
+        'div',
+        { class: 'banner warn read-warn' },
+        icon('warn'),
+        h(
+          'div',
+          {},
+          h('h2', { text: 'Part of this PDF may not have been read correctly' }),
+          h('p', {
+            text: mismatched.length
+              ? 'The totals of the report do not match the sum of its days, so some amounts were not read properly and these results may be incomplete:'
+              : 'The Total row of the report could not be found, so the amounts read from the PDF cannot be confirmed and these results may be incomplete.',
+          }),
+          mismatched.length ? h('ul', { class: 'read-list' }, mismatched.map((x) => h('li', { text: `${x.label}: day rows ${money(x.sum)}, Total row ${money(x.total)}` }))) : null,
+          h('p', { class: 'small', text: 'Re-print the statement from Rainmaker (Landscape, “+” pressed, More › Details), import it again, and check these results before relying on them.' }),
+        ),
+      ),
+    );
+  }
+
   // summary card
   const m = r.meta;
-  const bldl = (x) => `B ${money(x.B)} · L ${money(x.L)} · D ${money(x.D)} · S ${money(x.S)}`;
-  const tm = r.tables.meals;
-  const rateRows = [];
-  if (tm) {
-    rateRows.push(h('dt', { text: 'Meal rates' }), h('dd', { text: `${periodLabel(tm.period)} Meal Allowances table (${tm.source})` }));
-    rateRows.push(h('dt', { text: 'Canada' }), h('dd', { text: bldl(tm.canada) }));
-    if (tm.us) rateRows.push(h('dt', { text: 'U.S.' }), h('dd', { text: `${bldl(tm.us)} (Canadian funds)` }));
-  } else {
-    const src =
-      r.rates.key === 'CHART'
-        ? `Canada rates of the ${r.rates.label}${r.rates.fromOtherMonth ? ` (no table for ${periodLabel(m.period)})` : ''}`
-        : r.rates.key === 'FBMFR-ASSUMED'
-          ? `${r.rates.label} (no table from before March 2026 loaded)`
-          : `7.02.02, ${r.rates.label}`;
-    rateRows.push(h('dt', { text: 'Meal rates' }), h('dd', { text: `${src}: ${bldl(r.rates)}` }));
-    rateRows.push(h('dt', { text: 'U.S. meals' }), h('dd', { text: `Not checked: add the ${periodLabel(m.period)} Meal Allowances table` }));
-  }
-  const tr = r.tables.report;
-  rateRows.push(
-    h('dt', { text: 'Report times' }),
-    h('dd', {
-      text: tr && !tr.fallback
-        ? `What’s New ${periodLabel(tr.period)}, ${tr.rows} flights with an earlier report time`
-        : `${tr ? `What’s New ${periodLabel(tr.period)} used (no bulletin for ${periodLabel(m.period)})` : 'Standard report times (no What’s New bulletin)'}: some rules may not be validated`,
-    }),
-  );
   const stats = h(
     'div',
     { class: 'stats' },
@@ -586,7 +598,6 @@ function renderResults() {
         h('dd', { text: `${periodLabel(m.period)} (${m.period})` }),
         h('dt', { text: 'Home base' }),
         h('dd', { text: r.home }),
-        rateRows,
       ),
       stats,
     ),
@@ -613,16 +624,16 @@ function renderResults() {
   list.replaceChildren(...itemNodes(r, state.filter));
   nodes.push(itemsCard);
 
-  // other allowances
-  nodes.push(h('div', { class: 'section-title', text: 'Other allowances' }));
-  nodes.push(
+  // other allowances: only the $45 cleaning / $120 footwear, and only when missing
+  if (others.length) nodes.push(h('div', { class: 'section-title', text: 'Other allowances' }));
+  if (others.length) nodes.push(
     h(
       'div',
       { class: 'card' },
       h(
         'div',
         { class: 'items' },
-        r.other.map((o) =>
+        others.map((o) =>
           h(
             'div',
             { class: `item sev-${o.severity}` },
@@ -639,31 +650,6 @@ function renderResults() {
   nodes.push(h('div', { class: 'section-title', text: 'Day by day' }));
   nodes.push(h('div', { class: 'card' }, h('p', { class: 'muted small', text: 'Tap a day to see its flights and allowances. Times are local.' }), h('div', { class: 'days' }, dayNodes(r))));
 
-  // totals + rules
-  const reconOk = r.recon.every((x) => x.ok);
-  nodes.push(
-    h(
-      'div',
-      { class: 'card' },
-      h(
-        'details',
-        { class: 'more' },
-        h('summary', { text: `Statement totals ${reconOk ? '— all match' : '— mismatch found'}` }),
-        h(
-          'div',
-          {},
-          h('p', { class: 'muted small', text: 'The Total row of the report compared with the sum of the day rows.' }),
-          h(
-            'table',
-            { class: 'rates' },
-            h('tr', {}, h('th', { text: 'Column' }), h('th', { text: 'Days' }), h('th', { text: 'Total row' }), h('th', { text: '' })),
-            r.recon.map((x) => h('tr', {}, h('td', { text: x.label }), h('td', { text: money(x.sum) }), h('td', { text: money(x.total) }), h('td', { text: x.ok ? '✓' : '✗' }))),
-          ),
-        ),
-      ),
-    ),
-  );
-  nodes.push(rulesCard(r));
   nodes.push(
     h(
       'div',
@@ -757,65 +743,6 @@ function dayNodes(r) {
     out.push(h('details', { class: 'day' }, h('summary', {}, h('div', { class: 'd-main' }, h('div', { class: 'd-date', text: d.date }), h('div', { class: 'd-sub', text: sub })), chips), body));
   }
   return out;
-}
-
-function rulesCard(r) {
-  const rateRow = (t, current) => h('tr', { class: current ? 'current' : null }, h('td', { text: t.label }), h('td', { text: t.B.toFixed(2) }), h('td', { text: t.L.toFixed(2) }), h('td', { text: t.D.toFixed(2) }), h('td', { text: t.S.toFixed(2) }));
-  const rateRows = RATE_TABLE.map((t) => rateRow(t, t.key === r.rates.key));
-  // before March 2026: the Canada rates of the monthly table (not part of the agreement's 7.02.02 table)
-  if (r.rates.key === 'CHART') rateRows.unshift(rateRow({ ...r.rates, label: `Before March 2026: ${r.rates.label}` }, true));
-  const stations = r.stations
-    .map((s) => `${s.code} (${countryName(s.country)}${s.domestic === false ? ', overseas' : s.domestic === null ? ', unknown: treated as overseas' : ''}${s.offset ? `, ${s.offset > 0 ? '+' : '−'}${Math.abs(s.offset / 60)}h vs ${r.home}` : ''})`)
-    .join(' · ');
-  return h(
-    'div',
-    { class: 'card' },
-    h(
-      'details',
-      { class: 'more' },
-      h('summary', { text: 'Contract rules applied' }),
-      h(
-        'div',
-        { class: 'list' },
-        h('p', { class: 'muted small', text: `Quoted from the ${AGREEMENT}. Page numbers are pages of the PDF file.` }),
-        RULE_TEXT.map((x) =>
-          h(
-            'div',
-            { class: 'rule' },
-            h('div', { class: 'ref', text: `${x.ref} · PDF p. ${x.page}` }),
-            h('div', { class: 't', text: x.title }),
-            h('blockquote', { class: 'quote', text: x.text }),
-            x.use ? h('p', { class: 'use', text: x.use }) : null,
-          ),
-        ),
-        h(
-          'div',
-          { class: 'rule' },
-          h('div', { class: 'ref', text: '7.02.02 · PDF p. 21' }),
-          h('div', { class: 't', text: 'Canada/United States Meal Allowances (column for this period highlighted)' }),
-          h('div', { class: 'table-wrap' }, h('table', { class: 'rates' }, h('tr', {}, ['Effective Date', 'B', 'L', 'D', 'S'].map((t) => h('th', { text: t }))), rateRows)),
-        ),
-        h(
-          'div',
-          { class: 'rule' },
-          h('div', { class: 'ref', text: 'How the check works' }),
-          h('div', { class: 't', text: 'Duty periods and layovers' }),
-          h(
-            'p',
-            {
-              text:
-                'Duty periods follow B5.02.01 (with the B5.03.01 pre-duty report times) and end at the release time after the last actual arrival. ' +
-                'Layovers at overseas stations follow LOU 43; all other meals follow 7.02 and 7.02.01. ' +
-                `A ground stop of more than 7 h away from ${r.home} is treated as a layover. Legs marked PP, SICK or DISPLACED were not flown and are ignored. ` +
-                'Station clocks come from the flight times themselves. Meal periods are checked in local time with actual and scheduled times. ' +
-                '"Not paid" means the contract clearly applies. "Possibly owed" means it applies under another reasonable reading (for example using the arrival meal period or another station’s clock).',
-            },
-          ),
-          h('p', { class: 'small muted', text: `Stations: ${stations}` }),
-        ),
-      ),
-    ),
-  );
 }
 
 function printReport() {
@@ -973,4 +900,4 @@ if ('launchQueue' in window) {
 }
 
 // expose for debugging in the console only
-globalThis.__expenseChecker = { state, fmtClock };
+globalThis.__expenseChecker = { state, fmtClock, renderResults };
